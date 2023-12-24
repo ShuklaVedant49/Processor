@@ -1,0 +1,131 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 12/20/2023 05:09:13 PM
+// Design Name: 
+// Module Name: Test_Bench
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module Test_Bench;
+ 
+T dut();
+integer i = 0; 
+ 
+///////////////updating value of all GPR to 2
+initial begin
+for( i = 0; i < 32; i = i + 1)
+begin
+dut.GPR[i] = 2;
+end
+end
+ 
+ 
+ 
+initial begin
+//////// immediate add op
+$display("-----------------------------------------------------------------");
+dut.IR = 0;
+dut.`mode = 1;
+dut.`type = 2;
+dut.`source1 = 2;///gpr[2] = 2
+dut.`desti  = 0;///gpr[0]
+dut.`source = 4;
+#10;
+$display("OP:ADI Rsrc1:%0d  Rsrc2:%0d Rdst:%0d",dut.GPR[2], dut.`source, dut.GPR[0]);
+$display("-----------------------------------------------------------------");
+////////////register add op
+dut.IR = 0;
+dut.`mode = 0;
+dut.`type = 2;
+dut.`source1 = 4;
+dut.`source2 = 5;
+dut.`desti  = 0;
+#10;
+$display("OP:ADD Rsrc1:%0d  Rsrc2:%0d Rdst:%0d",dut.GPR[4], dut.GPR[5], dut.GPR[0] );
+$display("-----------------------------------------------------------------");
+ 
+//////////////////////immediate mov op
+dut.IR = 0;
+dut.`mode = 1;
+dut.`type = 1;
+dut.`desti = 4;///gpr[4]
+dut.`source = 55;
+#10;
+$display("OP:MOVI Rdst:%0d  imm_data:%0d",dut.GPR[4],dut.`source);
+$display("-----------------------------------------------------------------");
+
+dut.IR = 0;
+dut.`mode = 1;
+dut.`type = 6;
+dut.`desti = 4;///gpr[4]
+dut.`source1=8;
+dut.`source = 5;
+#10;
+$display("OP:AND Rdst:%08b source1:%08b imm_data:%08b",dut.GPR[4],dut.GPR[7],dut.`source);
+$display("-----------------------------------------------------------------");
+
+//Logical Exor
+dut.IR = 0;
+dut.`mode = 1;
+dut.`type = 9;
+dut.`desti = 4;///gpr[4]
+dut.`source1 = 9;
+dut.`source  = 7;
+#10;
+$display("OP:XOR Rdst:%08b  source1:%08b imm_data:%08b",dut.GPR[4],dut.GPR[7],dut.`source);
+$display("-----------------------------------------------------------------");
+
+dut.IR  = 0;
+dut.GPR[0] = 0;
+dut.GPR[1] = 0; 
+dut.`mode = 0;
+dut.`source1 = 0;//gpr[0]
+dut.`source2 = 1;//gpr[1]
+dut.`type = 2;
+dut.`desti = 2;
+#10;
+$display("OP:Zero Rsrc1:%0d  Rsrc2:%0d Rdst:%0d",dut.GPR[0], dut.GPR[1], dut.GPR[2] );
+$display("-----------------------------------------------------------------");
+ 
+//////////////////////////sign flag
+dut.IR = 0;
+dut.GPR[0] = 16'h8000; /////1000_0000_0000_0000
+dut.GPR[1] = 0; 
+dut.`mode = 0;
+dut.`source1 = 0;//gpr[0]
+dut.`source2 = 1;//gpr[1]
+dut.`type = 2;
+dut.`desti = 2;
+#10;
+$display("OP:Sign Rsrc1:%0d  Rsrc2:%0d Rdst:%0d",dut.GPR[0], dut.GPR[1], dut.GPR[2] );
+$display("-----------------------------------------------------------------");
+ 
+////////////////////////carry flag
+dut.IR = 0;
+dut.GPR[0] = 16'h8000; /////1000_0000_0000_0000   <0
+dut.GPR[1] = 16'h8002; /////1000_0000_0000_0010   <0
+dut.`mode = 0;
+dut.`source1 = 0;//gpr[0]
+dut.`source2 = 1;//gpr[1]
+dut.`type = 2;
+dut.`desti = 2;    //////// 0000_0000_0000_0010  >0
+#10;
+ 
+$display("OP:Carry & Overflow Rsrc1:%0d  Rsrc2:%0d Rdst:%0d",dut.GPR[0], dut.GPR[1], dut.GPR[2] );
+$display("-----------------------------------------------------------------");
+end 
+endmodule
