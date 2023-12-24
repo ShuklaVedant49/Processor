@@ -1,0 +1,209 @@
+`timescale 1ns / 1ps
+ 
+///////////fields of IR
+`define type      IR[31:27]
+`define desti     IR[26:22]
+`define source1   IR[21:17]
+`define mode      IR[16]        //Mode 0&1 tell about will be needing source register or not.
+`define source2   IR[15:11]
+`define source    IR[15:0] 
+ 
+//Adding Arithemetic Unit
+`define movsgpr        5'b00000
+`define mov            5'b00001
+`define add            5'b00010
+`define sub            5'b00011
+`define mul            5'b00100
+
+//Adding Logical Unit
+/* Performing the gate level operation with the help of
+ Logical unit feature provided by the processor*/
+`define ror            5'b00101
+`define rand           5'b00110
+`define rnot           5'b00111
+`define rxor           5'b01000
+`define rxnor          5'b01001
+`define rnand          5'b01010
+`define rnor           5'b01011
+ 
+ 
+module T;
+
+/* temporary storage unit that holds the current machine instruction being executed, 
+facilitating the decoding and execution of the instruction by the processor*/
+reg [31:0] IR;           
+ 
+/*General Purpose Register (GPR) is a type of processor register 
+that can be used for various purpose in a computer's central processing unit
+16-bit because of 5 bit of source/destination address*/
+reg [15:0] GPR [31:0] ;   ///////general purpose register gpr[0] ....... gpr[31]
+
+
+reg [15:0] SGPR ;      // Special GPR for multiplication result.
+reg [31:0] mul_res;    //Multiplication result in this result
+
+
+
+always@(*)
+begin
+//
+case(`type)
+///////////////////////////////
+/*Arithmetic Unit */
+`movsgpr: begin
+   GPR[`desti] = SGPR;
+end
+ 
+/////////////////////////////////
+`mov : begin
+   if(`mode)
+        GPR[`desti]  = `source;
+   else
+       GPR[`desti]   = GPR[`source1];
+end
+ 
+////////////////////////////////////////////////////
+`add : begin
+      if(`mode)
+        GPR[`desti]   = GPR[`source1] + `source;
+     else
+        GPR[`desti]   = GPR[`source1] + GPR[`source2];
+end
+/////////////////////////////////////////////////////////
+ 
+`sub : begin
+      if(`mode)
+        GPR[`desti]  = GPR[`source1] - `source;
+     else
+       GPR[`desti]   = GPR[`source1] - GPR[`source2];
+end
+  
+`mul : begin
+      if(`mode)
+        mul_res   = GPR[`source1] * `source;
+     else
+        mul_res   = GPR[`source1] * GPR[`source2];
+        
+     GPR[`desti]   =  mul_res[15:0];
+     SGPR         =   mul_res[31:16];
+end
+
+
+/////////////////////////////////////////////////////////////
+/* LOGICAL UNIT */
+`ror : begin
+      if(`mode)
+        GPR[`desti] = GPR[`source1] | `source;
+      else
+        GPR[`desti] = GPR[`source1] | GPR[`source2];
+ end
+ 
+ `rand : begin
+      if(`mode)
+        GPR[`desti] = GPR[`source1] & `source;
+      else
+        GPR[`desti] = GPR[`source1] & GPR[`source2];
+ end
+ 
+ `rnot : begin
+      if(`mode)
+        GPR[`desti] = ~(`source);
+      else
+        GPR[`desti] = ~(GPR[`source1]);
+ end
+ 
+ `rxor : begin
+      if(`mode)
+        GPR[`desti] = GPR[`source1] ^ `source;
+      else
+        GPR[`desti] = GPR[`source1] ^ GPR[`source2];
+ end
+ 
+ `rxnor : begin
+      if(`mode)
+        GPR[`desti] = GPR[`source1] ~^ `source;
+      else
+        GPR[`desti] = GPR[`source1] ~^ GPR[`source2];
+ end
+ 
+ `rnand : begin
+      if(`mode)
+        GPR[`desti] = ~(GPR[`source1] & `source);
+      else
+        GPR[`desti] = ~(GPR[`source1] & GPR[`source2]);
+ end
+ 
+`rnor : begin
+      if(`mode)
+        GPR[`desti] = ~(GPR[`source1] | `source);
+      else
+        GPR[`desti] = ~(GPR[`source1] | GPR[`source2]);
+ end
+/////////////////////////////////////////////////////////////
+/*These are all the instruction which are supported in this processor design */
+endcase
+end
+
+/* Designing CONTROL Unit */
+//Logic for All the flags required for the design
+
+reg sign=0;
+reg zero=0;
+reg carry=0;
+reg overflow=0;
+reg [15:0] sum_temp ; 
+
+always@(*)
+begin
+/* Sign flag*/
+if(`type == `mul)
+    sign = SGPR[15]; //multiplication MSB will be stored in SGPR register instead of mul_res
+else
+    sign = GPR[`desti] [15]; // if not multiplication use the 15th bit of destination register to check MSB
+ 
+/*Carry flag*/
+if(`type == `add)
+    begin
+        if(`mode)
+           begin
+           sum_temp  = GPR[`source1] + `source;
+           carry     = sum_temp[16];
+           end
+        else
+            begin
+            sum_temp = GPR[`source1] & GPR[`source2];
+            carry     = sum_temp[16]; 
+            end
+     end
+ else
+    begin   
+        carry = 1'b0;
+    end
+ 
+ /* ZERO FLAG*///checking for the 0 and 1's
+if(`type == `mul)
+    zero= ~((|SGPR[15] | GPR[`desti]));
+ else
+    zero= ~(|GPR[`desti]);
+    
+ /* OVERFLOW FLag*/
+ if(`type == `add)
+     begin
+       if(`mode)
+         overflow = ( (~GPR[`source1][15] & ~IR[15] & GPR[`desti][15] ) | (GPR[`source1][15] & IR[15] & ~GPR[`desti][15]) );
+       else
+         overflow = ( (~GPR[`source1][15] & ~GPR[`source2][15] & GPR[`desti][15]) | (GPR[`source1][15] & GPR[`source2][15] & ~GPR[`desti][15]));
+     end
+  else if(`type == `sub)
+    begin
+       if(`mode)
+         overflow = ( (~GPR[`source1][15] & IR[15] & GPR[`desti][15] ) | (GPR[`source1][15] & ~IR[15] & ~GPR[`desti][15]) );
+       else
+         overflow = ( (~GPR[`source1][15] & GPR[`source2][15] & GPR[`desti][15]) | (GPR[`source1][15] & ~GPR[`source2][15] & ~GPR[`desti][15]));
+    end 
+  else
+     begin
+     overflow = 1'b0;
+     end    
+ end
+endmodule
