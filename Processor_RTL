@@ -25,9 +25,19 @@
 `define rxnor          5'b01001
 `define rnand          5'b01010
 `define rnor           5'b01011
+
+//Load and Store Instruction
+`define storereg       5'b01101   //////store content of register in data memory
+`define storedin       5'b01110   ////// store content of din bus in data memory
+`define senddout       5'b01111   /////send data from DM to dout bus
+`define sendreg        5'b10001   ////// send data from DM to register
  
  
-module T;
+module T(
+input clk,sys_rst,
+input [15:0] din, //Will rcv from extrernal bus where user will load the data which inclued series of instruction
+output reg [15:0] dout //Outout data bus
+);
 
 /* temporary storage unit that holds the current machine instruction being executed, 
 facilitating the decoding and execution of the instruction by the processor*/
@@ -43,8 +53,15 @@ reg [15:0] SGPR ;      // Special GPR for multiplication result.
 reg [31:0] mul_res;    //Multiplication result in this result
 
 
+//Adding program and data memory to uor RTL/////
+reg [31:0] Prog_mem [15:0];
+reg [31:0] data_mem [15:0];
+/* Using harvard architecture for memory model*/
 
-always@(*)
+/**************************************************************************************************/
+// Arithmetic Unit
+/**************************************************************************************************/
+task decode_inst();
 begin
 //
 case(`type)
@@ -89,8 +106,9 @@ end
 end
 
 
-/////////////////////////////////////////////////////////////
-/* LOGICAL UNIT */
+/**************************************************************************************************/
+// Logical Unit
+/**************************************************************************************************/
 `ror : begin
       if(`mode)
         GPR[`desti] = GPR[`source1] | `source;
@@ -139,21 +157,44 @@ end
       else
         GPR[`desti] = ~(GPR[`source1] | GPR[`source2]);
  end
+ 
+ //Adding few more instruction to work with Prots and data memory
+ `storedin : begin
+    data_mem[`source] = din;
+ end
+ 
+ `storereg : begin
+    data_mem[`source] =GPR[`source1];
+ end
+ 
+ `senddout : begin
+    dout =data_mem[`source];
+ end
+    
+ `sendreg :begin
+    GPR[`desti] =  data_mem[`source];
+end
 /////////////////////////////////////////////////////////////
 /*These are all the instruction which are supported in this processor design */
 endcase
 end
-
+endtask
 /* Designing CONTROL Unit */
 //Logic for All the flags required for the design
+
 
 reg sign=0;
 reg zero=0;
 reg carry=0;
 reg overflow=0;
-reg [15:0] sum_temp ; 
+reg [32:0] sum_temp ; 
 
-always@(*)
+/**************************************************************************************************/
+// Control Unit
+/**************************************************************************************************/
+
+//Making conditional flag as task
+task flag_decoding();
 begin
 /* Sign flag*/
 if(`type == `mul)
@@ -205,5 +246,79 @@ if(`type == `mul)
      begin
      overflow = 1'b0;
      end    
+ end 
+endtask
+
+/**************************************************************************************************/
+//Program Mmeormy and Data Memroy
+/**************************************************************************************************/
+//Reading the memory file
+initial begin
+$readmemb("C:/Users/Vedant/Desktop/data.mem",data_mem);
+end
+
+
+//Reading for each iteration
+reg [2:0] count=0;
+integer PC=0;
+
+//Reading file and incrementing the PC
+always@(posedge clk)
+begin
+    if(sys_rst)
+     begin
+       count<=0;
+       PC   <=0; //This stores the location for each instruction
+     end
+     else
+        begin
+            if(count<4)
+                begin
+                    count<= count+1;
+                end
+            else
+                begin
+                count<=0;
+                PC   <=PC+1;
+                end
+         end
  end
+ 
+ //Have added program memory and data memory in our code
+ //Need to feed all the instrcution in program memory...[Not manually]
+ //So the Processor will be reading the instruction One after another from Program memory
+ /* Do few things:
+ 1) Read Instruction
+ 2) Decode Instruction
+ 3) Check the flag condition */
+ 
+ /*
+ If we want to perform/detect simple move instruction
+ Inst: Mov R0,2;
+ IR will be like this
+ 00001(Operand type)-00000(Desti)-000000(Source1)-1(Immediate mode)
+ Last 16 bits will be like :
+ 0000-0000-0000-0010 (2 will be loaded into desti register R0)
+ 
+ Operation will be like this:
+ Mov R0,2;
+ Mov R1,3;
+ ADD/MUL R2,R0,R1; [Arithmetic Operation]
+ ROR/RNAND [Logical Operation]
+ --STOREREG 0,R2; Data_Mem -> 5(R2) This instruction helps in storing into register
+ 
+ So all these instruction is needed to be in binary format for that out ALU can easily decode which opertion to perform
+ *lOOK AT DATA.mem Memory file*
+ */
+ 
+always@(*)
+begin
+    if(sys_rst == 1'b1)
+        IR=0;
+    else begin
+        IR=data_mem[PC];    // reading instruction based on the PC value
+        decode_inst();
+        flag_decoding();
+     end
+end
 endmodule
